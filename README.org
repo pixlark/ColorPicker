@@ -1,5 +1,7 @@
 * Color Picker
 
+[[./screenshot.png]]
+
 ** Installation
 
 *** Windows
