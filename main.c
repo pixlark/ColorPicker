@@ -7,9 +7,16 @@
  *
  */
 
+#if defined(_WIN32) || defined(_WIN64)
+#define SDL_MAIN_HANDLED
+#include <SDL.h>
+#include <SDL_ttf.h>
+#include <Windows.h>
+#else
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
-#include <pixcolor.h>
+#include <SDL_ttf.h>
+#endif
+
 #include <pixint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,7 +55,15 @@ void draw_gradient(SDL_Surface * screen_surface, u8 slider_value) {
 	SDL_FreeSurface(square_surface);
 }
 
+#if defined(_WIN32) || defined(_WIN64)
+int WINAPI WinMain(
+	HINSTANCE hInstance,
+	HINSTANCE hPrevInstance,
+	LPSTR lpCmdLine,
+	int nCmdShow) {
+#else
 int main(int argc, char * argv[]) {
+#endif
 	SDL_Window * window;
 	SDL_Surface * screen_surface;
 

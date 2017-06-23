@@ -1,1 +1,8 @@
 colorpicker
+*.sln
+/colorpicker
+/colorpicker/*
+*.sdf
+*.opensdf
+/vs-junk
+/vs-junk/*
