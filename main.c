@@ -96,7 +96,11 @@ int main(int argc, char * argv[]) {
 	SDL_Rect slider_dst_rect;
 	slider_dst_rect.x = 0;
 	slider_dst_rect.y = SCREEN_WIDTH;
+	slider_dst_rect.w = 0; // junk
+	slider_dst_rect.h = 0; // values
 	SDL_Rect slider_src_rect;
+	slider_src_rect.x = 0; // junk
+	slider_src_rect.y = 0; // values
 	slider_src_rect.w = (slider_value * slider_width) / 256;
 	slider_src_rect.h = picked_color_size / 2;
 
@@ -121,6 +125,8 @@ int main(int argc, char * argv[]) {
 	SDL_Rect color_text_rect;
 	color_text_rect.x = 10;
 	color_text_rect.y = SCREEN_WIDTH + slider_height + 10;
+	color_text_rect.w = 0; // junk
+	color_text_rect.h = 0; // values
 
 	/* COLOR */
 	u8 current_r = 0;
@@ -149,6 +155,9 @@ int main(int argc, char * argv[]) {
 						SDL_FillRect(picked_color_surface, 0,
 							SDL_MapRGB(picked_color_surface->format,
 								current_r, current_g, current_b));
+						if (picked_color_surface == 0) {
+							error_quit("Picked colour surface is null.");
+						}
 						color_changed = 0xFF;
 					} else if (
 						mouse_y >= SCREEN_WIDTH &&
@@ -159,16 +168,21 @@ int main(int argc, char * argv[]) {
 						slider_src_rect.w = mouse_x;
 						SDL_FillRect(slider_surface, 0,
 							SDL_MapRGB(slider_surface->format, 0, 0, slider_value));
+						if (slider_surface == 0) {
+							error_quit("Slider surface is null.");
+						}
 					}
 				} break;
 			}
 		}
 		/* TEXT */
-		char rgb_str[64];
+		char * rgb_str = malloc(sizeof(char) * 64);
 		sprintf(rgb_str, "R: %d G: %d B: %d",
 			current_r, current_g, current_b);
+		SDL_FreeSurface(color_text_surface);
 		color_text_surface =
 			TTF_RenderText_Solid(default_font, rgb_str, font_color);
+		free(rgb_str);
 		/* DRAW */
 		SDL_FillRect(
 			screen_surface, 0,
@@ -180,7 +194,7 @@ int main(int argc, char * argv[]) {
 		SDL_BlitSurface(
 			slider_bg_surface, 0,
 			screen_surface, &slider_bg_rect);
-		SDL_BlitSurface(
+		SDL_BlitSurface( // Uninitialized value ?
 			slider_surface, &slider_src_rect,
 			screen_surface, &slider_dst_rect);
 		SDL_BlitSurface(
