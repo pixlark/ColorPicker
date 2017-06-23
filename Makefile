@@ -1,4 +1,4 @@
 r:
-	gcc main.c -w -lSDL2 -lSDL2_ttf -o colorpicker
+	gcc main.c -w -lSDL2 -lSDL2_ttf -o build/linux/colorpicker
 d:
-	gcc main.c -g -w -lSDL2 -lSDL2_ttf colorpicker
+	gcc main.c -g -w -lSDL2 -lSDL2_ttf build/linux/colorpicker

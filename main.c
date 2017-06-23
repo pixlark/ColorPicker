@@ -14,7 +14,7 @@
 #include <Windows.h>
 #else
 #include <SDL2/SDL.h>
-#include <SDL_ttf.h>
+#include <SDL2/SDL_ttf.h>
 #endif
 
 #include <pixint.h>
