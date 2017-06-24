@@ -81,7 +81,9 @@ int WINAPI WinMain(
 #else
 int main(int argc, char * argv[]) {
 #endif
+#if !(defined(_WIN32) || defined(_WIN64))
 	strip_dir(*argv);
+#endif
 	SDL_Window * window;
 	SDL_Surface * screen_surface;
 
@@ -140,9 +142,13 @@ int main(int argc, char * argv[]) {
 	/* TEXT */
 	TTF_Init();
 	char * font_name = "DejaVuSans.ttf";
+#if defined(_WIN32) || defined(_WIN64)
+	char * font_path = font_name;
+#else
 	char * font_path = malloc(sizeof(char) * (strlen(*argv) + strlen(font_name) - 1));
 	strcpy(font_path, *argv);
 	strcat(font_path, font_name);
+#endif
 	TTF_Font * default_font = TTF_OpenFont(font_path, 16);
 	if (default_font == 0) {
 		fprintf(stderr, "Trouble loading font. TTF_Error:\n\t%s\n", TTF_GetError());
