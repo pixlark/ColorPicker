@@ -7,8 +7,16 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 
-#define SCREEN_WIDTH  512
-#define SCREEN_HEIGHT 600
+// A buttload of magic numbers for positioning stuff on the
+// screen. It's ugly, but it makes things clear.
+#define SCREEN_WIDTH        (512)
+#define SCREEN_HEIGHT       (600)
+#define MAIN_GRADIENT_SIZE  (SCREEN_WIDTH)
+#define SAMPLE_BOX_SIZE     (SCREEN_HEIGHT - SCREEN_WIDTH)
+#define HUE_GRADIENT_WIDTH  (SCREEN_WIDTH  - SAMPLE_BOX_SIZE)
+#define HUE_GRADIENT_HEIGHT (SAMPLE_BOX_SIZE / 2)
+#define HUE_SLIDER_HEIGHT   (HUE_GRADIENT_HEIGHT)
+#define HUE_SLIDER_WIDTH    (3)
 
 // Start of David H's conversion code
 typedef struct {
@@ -146,16 +154,24 @@ void set_pixel(SDL_Surface * surface, SDL_Color color, int x, int y)
 	((char*)surface->pixels)[(x + y * surface->w) * 4 + 3] = color.a;
 }
 
-void draw_gradient(SDL_Renderer * renderer)
+void draw_surface_as_texture(SDL_Renderer * renderer, SDL_Surface * surface, int x, int y)
+{
+	SDL_Texture * render_texture = SDL_CreateTextureFromSurface(renderer, surface);
+	SDL_Rect render_rect = {x, y, surface->w, surface->h};
+	SDL_RenderCopy(renderer, render_texture, NULL, &render_rect);
+	SDL_DestroyTexture(render_texture);
+}
+
+void draw_gradient(SDL_Renderer * renderer, double hue)
 {
 	SDL_Surface * surface = SDL_CreateRGBSurface(
-		0, SCREEN_WIDTH, SCREEN_WIDTH, 32,
+		0, MAIN_GRADIENT_SIZE, MAIN_GRADIENT_SIZE, 32,
 		0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
 	
 	for (int y = 0; y < surface->h; y++) {
 		for (int x = 0; x < surface->w; x++) {
 			HSVColor hsv_color = {
-				180, //(double) y / surface->h * 360,
+				hue,
 				(double) x / surface->w,
 				1.0 - ((double) y / surface->h),
 			};
@@ -163,12 +179,49 @@ void draw_gradient(SDL_Renderer * renderer)
 		}
 	}
 	
-	SDL_Texture * render_texture = SDL_CreateTextureFromSurface(renderer, surface);
+	draw_surface_as_texture(renderer, surface, 0, 0);
 	SDL_FreeSurface(surface);
-	SDL_Rect render_rect = {0, 0, surface->w, surface->h};
-	SDL_RenderCopy(renderer, render_texture, NULL, &render_rect);
-	SDL_DestroyTexture(render_texture);
 }
+
+void draw_hue_gradient(SDL_Renderer * renderer)
+{
+	SDL_Surface * surface = SDL_CreateRGBSurface(
+		0, HUE_GRADIENT_WIDTH, HUE_GRADIENT_HEIGHT, 32,
+		0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
+	for (int y = 0; y < surface->h; y++) {
+		for (int x = 0; x < surface->w; x++) {
+			HSVColor hsv_color = {
+				(double) x / surface->w * 360,
+				1.0, 1.0,
+			};
+			set_pixel(surface, from_RGBColor(hsv_to_rgb(hsv_color)), x, y);
+		}
+	}
+
+	draw_surface_as_texture(renderer, surface, 0, MAIN_GRADIENT_SIZE);
+	SDL_FreeSurface(surface);	
+}
+
+void draw_hue_slider(SDL_Renderer * renderer, double hue)
+{
+	SDL_Rect draw_rect = {
+		(hue / 360.0) * HUE_GRADIENT_WIDTH,
+		MAIN_GRADIENT_SIZE,
+		HUE_SLIDER_WIDTH,
+		HUE_SLIDER_HEIGHT,
+	};
+	SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, 0xff);
+	SDL_RenderFillRect(renderer, &draw_rect);
+}
+
+/* Elements that get rendered:
+ *   [x] main gradient
+ *   [x] hue gradient
+ *   [ ] slider bar on hue gradient
+ *   [ ] sampling box
+ *   [ ] position indicator
+ *   [ ] info text
+ */
 
 int main()
 {
@@ -179,6 +232,8 @@ int main()
 		SCREEN_WIDTH, SCREEN_HEIGHT,
 		SDL_WINDOW_SHOWN);
 	SDL_Renderer * renderer = SDL_CreateRenderer(window, -1, 0);
+
+	double current_hue = 180;
 	
 	SDL_Event event;
 	bool running = true;
@@ -190,7 +245,13 @@ int main()
 				break;
 			}
 		}
-		draw_gradient(renderer);
+		SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xff);
+		SDL_RenderClear(renderer);
+		// main gradient
+		draw_gradient(renderer, current_hue);
+		// hue slider
+		draw_hue_gradient(renderer);
+		draw_hue_slider(renderer, current_hue);
 		SDL_RenderPresent(renderer);
 		SDL_Delay(17);
 	}
