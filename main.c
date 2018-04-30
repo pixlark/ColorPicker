@@ -297,12 +297,38 @@ void draw_info_text(SDL_Renderer * renderer, HSVColor hsv_color)
 		MAIN_GRADIENT_SIZE + HUE_GRADIENT_HEIGHT + TEXT_PADDING);
 }
 
+void draw_position_indicator(SDL_Renderer * renderer, HSVColor color)
+{
+	char heavy = 0xaa;
+	char light = 0x88;
+	char circle[5 * 5] = {
+		0x00 , light, heavy, light, 0x00 ,
+		light, heavy, heavy, heavy, light,
+		heavy, heavy, heavy, heavy, heavy,
+		light, heavy, heavy, heavy, light,
+		0x00 , light, heavy, light, 0x00 ,
+	};
+	SDL_Surface * surface = SDL_CreateRGBSurface(
+		0, 5, 5, 32,
+		0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
+	for (int y = 0; y < 5; y++) {
+		for (int x = 0; x < 5; x++) {
+			SDL_Color color = {0xff, 0xff, 0xff, circle[x + y * 5]};
+			set_pixel(surface, color, x, y);
+		}
+	}
+	draw_surface_as_texture(renderer, surface,
+		       color.s  * MAIN_GRADIENT_SIZE - 3,
+		(1.0 - color.v) * MAIN_GRADIENT_SIZE - 3);
+	SDL_FreeSurface(surface);
+}
+
 /* Elements that get rendered:
  *   [x] main gradient
  *   [x] hue gradient
  *   [x] slider bar on hue gradient
  *   [x] sampling box
- *   [ ] position indicator
+ *   [x] position indicator
  *   [x] info text
  */
 
@@ -390,15 +416,12 @@ int main()
 		// drawing
 		SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xff);
 		SDL_RenderClear(renderer);
-		// main gradient
 		draw_gradient(renderer, current_color.h);
-		// hue slider
 		draw_hue_gradient(renderer);
 		draw_hue_slider(renderer, current_color.h);
-		// info text
 		draw_info_text(renderer, current_color);
-		// sample box
 		draw_sample_box(renderer, from_RGBColor(hsv_to_rgb(current_color)));
+		draw_position_indicator(renderer, current_color);
 		SDL_RenderPresent(renderer);
 		SDL_Delay(8);
 	}
