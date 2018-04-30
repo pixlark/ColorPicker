@@ -426,8 +426,9 @@ int main()
 	}
 	
 	HSVColor current_color = {180.0, 1.0, 1.0};
-	
 	enum UIState ui_state = UI_NONE;
+
+	uint64_t last_counter = SDL_GetPerformanceCounter();
 	
 	SDL_Event event;
 	bool running = true;
@@ -454,7 +455,6 @@ int main()
 			
 		}
 		// input
-		// hue slider
 		switch (ui_state) {
 		case UI_GRADIENT_CHANGE: {
 			current_color.s = ((double) clamp(0, MAIN_GRADIENT_SIZE, m.x) / MAIN_GRADIENT_SIZE);
@@ -475,6 +475,18 @@ int main()
 		draw_sample_box(renderer, from_RGBColor(hsv_to_rgb(current_color)));
 		draw_position_indicator(renderer, current_color);
 		SDL_RenderPresent(renderer);
+
+		// limit framerate
+		{
+			uint64_t counter = SDL_GetPerformanceCounter();
+			int delta_ms = (counter - last_counter) * 1000 / SDL_GetPerformanceFrequency();
+			//printf("%3.2f\r", 1.0 / ((double) delta_ms / 1000));
+			//fflush(stdout);
+			int target_ms = 17; // 17 ms between each frame is about 60 fps
+			if (target_ms - delta_ms > 0) SDL_Delay(target_ms - delta_ms);
+			last_counter = counter;
+		}
+		
 	}
 	
 	return 0;
