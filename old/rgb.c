@@ -1,9 +1,9 @@
 /** COPYRIGHT (C) 2017
  ** https://pixlark.github.io/
  *
- ** main.c
+ ** rgb.c
  * 
- * This file contains a basic color picking program for the HSV color
+ * This file contains a basic color picking program for the RGB color
  * space.
  *
  */
@@ -18,8 +18,8 @@
 #include <SDL2/SDL_ttf.h>
 #endif
 
-#include <pixcolor.h>
-#include <pixint.h>
+#include "pixcolor.h"
+#include "pixint.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -59,10 +59,8 @@ void draw_gradient(SDL_Surface * screen_surface, u8 slider_value) {
 	do {
 		u8 g = 0;
 		do {
-			HSVColor print_hsv; print_hsv.h = slider_value; print_hsv.s = r; print_hsv.v = g;
-			RGBColor print_rgb = HSVtoRGB(print_hsv);
 			SDL_FillRect(square_surface, 0,
-				SDL_MapRGB(square_surface->format, print_rgb.r, print_rgb.g, print_rgb.b));
+				SDL_MapRGB(square_surface->format, r, g, slider_value));
 			SDL_Rect this_rect;
 			this_rect.x = r*cell_size;
 			this_rect.w = cell_size;
@@ -116,27 +114,30 @@ int main(int argc, char * argv[]) {
 	/* COLOR SLIDER */
 	u16 slider_width = SCREEN_WIDTH - picked_color_size;
 	u16 slider_height = picked_color_size / 2;
-	char * bmp_name = "hue.bmp";
-#if defined(_WIN32) || defined(_WIN64)
-	char * bmp_path = bmp_name;
-#else
-	char * bmp_path = malloc(sizeof(char) * (strlen(*argv) + strlen(bmp_name) - 1));
-	strcpy(bmp_path, *argv);
-	strcat(bmp_path, bmp_name);
-#endif
-	SDL_Surface * slider_bg_surface = SDL_LoadBMP(bmp_path);
+	SDL_Surface * slider_bg_surface = SDL_CreateRGBSurface(
+		0, slider_width, slider_height, 32, 0, 0, 0, 0);
+	SDL_FillRect(slider_bg_surface, 0,
+		SDL_MapRGB(slider_bg_surface->format, 255, 255, 255));
 	SDL_Rect slider_bg_rect;
 	slider_bg_rect.x = 0;
 	slider_bg_rect.w = slider_width;
 	slider_bg_rect.y = SCREEN_WIDTH;
 	slider_bg_rect.h = picked_color_size / 2;
-	SDL_Surface * slider_bar_surface = SDL_CreateRGBSurface(
-		0, 3, slider_height, 32, 0, 0, 0, 0);
-	SDL_FillRect(slider_bar_surface, 0, SDL_MapRGB(slider_bar_surface->format, 255, 255, 255));
+	SDL_Surface * slider_surface = SDL_CreateRGBSurface(
+		0, slider_width, slider_height, 32, 0, 0, 0, 0);
 	u8 slider_value = 127;
-	SDL_Rect slider_bar_rect;
-	slider_bar_rect.x = ((slider_value * slider_width) / 255) - 1;
-	slider_bar_rect.y = SCREEN_WIDTH;
+  	SDL_FillRect(slider_surface, 0,
+		SDL_MapRGB(slider_surface->format, 0, 0, slider_value));
+	SDL_Rect slider_dst_rect;
+	slider_dst_rect.x = 0;
+	slider_dst_rect.y = SCREEN_WIDTH;
+	slider_dst_rect.w = 0; // junk
+	slider_dst_rect.h = 0; // values
+	SDL_Rect slider_src_rect;
+	slider_src_rect.x = 0; // junk
+	slider_src_rect.y = 0; // values
+	slider_src_rect.w = (slider_value * slider_width) / 255;
+	slider_src_rect.h = picked_color_size / 2;
 
 	/* TEXT */
 	TTF_Init();
@@ -159,7 +160,7 @@ int main(int argc, char * argv[]) {
 	font_color.b = 255;
 	font_color.a = 255;
 	SDL_Surface * rgb_color_text_surface =
-		TTF_RenderText_Solid(default_font, "...", font_color);
+		TTF_RenderText_Solid(default_font, "Click gradient to select color.", font_color);
 	if (rgb_color_text_surface == 0) {
 		fprintf(stderr, "Trouble creating surface from font. TTF_Error\n\t%s\n", TTF_GetError());
 		exit(1);
@@ -182,8 +183,8 @@ int main(int argc, char * argv[]) {
 	hsv_color_text_rect.h = 0; // values
 
 	/* COLOR */
-	RGBColor current_rgb; current_rgb.r = 0; current_rgb.g = 0; current_rgb.b = 0;
-	HSVColor current_hsv; current_hsv.h = 0; current_hsv.s = 0; current_hsv.v = 0;
+	RGBColor current_rgb;
+	HSVColor current_hsv;
 	
 	u8 running = 0xFF;
 	u8 current_interaction = NONE;
@@ -220,10 +221,10 @@ int main(int argc, char * argv[]) {
 			int mouse_y = 0;
 			SDL_GetMouseState(&mouse_x, &mouse_y);
 			if (current_interaction == GRADIENT) {
-				current_hsv.s = mouse_x / (SCREEN_WIDTH/256);
-				current_hsv.v = mouse_y / (SCREEN_WIDTH/256);
-				current_hsv.h = slider_value;
-				current_rgb = HSVtoRGB(current_hsv);
+				current_rgb.r = mouse_x / (SCREEN_WIDTH/256);
+				current_rgb.g = mouse_y / (SCREEN_WIDTH/256);
+				current_rgb.b = slider_value;
+				current_hsv = RGBtoHSV(current_rgb);
 				SDL_FillRect(picked_color_surface, 0,
 							 SDL_MapRGB(picked_color_surface->format,
 										current_rgb.r, current_rgb.g, current_rgb.b));
@@ -239,7 +240,12 @@ int main(int argc, char * argv[]) {
 				} else {
 					slider_value = (255 * mouse_x) / slider_width;
 				}
-				slider_bar_rect.x = ((slider_value * slider_width) / 255) - 1;
+				slider_src_rect.w = (slider_value * slider_width) / 255;
+				SDL_FillRect(slider_surface, 0,
+							 SDL_MapRGB(slider_surface->format, 0, 0, slider_value));
+				if (slider_surface == 0) {
+					error_quit("Slider surface is null.");
+				}
 			}
 		}
 		/* TEXT */
@@ -263,14 +269,14 @@ int main(int argc, char * argv[]) {
 			SDL_MapRGB(screen_surface->format, 0, 0, 0));
 		draw_gradient(screen_surface, slider_value);
 		SDL_BlitSurface(
-			slider_bg_surface, 0,
-			screen_surface, &slider_bg_rect);
-		SDL_BlitSurface(
-			slider_bar_surface, 0,
-			screen_surface, &slider_bar_rect);
-		SDL_BlitSurface(
 			picked_color_surface, 0,
 			screen_surface, &picked_color_rect);
+		SDL_BlitSurface(
+			slider_bg_surface, 0,
+			screen_surface, &slider_bg_rect);
+		SDL_BlitSurface( // Uninitialized value ?
+			slider_surface, &slider_src_rect,
+			screen_surface, &slider_dst_rect);
 		SDL_BlitSurface(
 			rgb_color_text_surface, 0,
 			screen_surface, &rgb_color_text_rect);
