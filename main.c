@@ -6,8 +6,11 @@
 #include <stdlib.h>
 #include <math.h>
 
+#define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+
+#include <zlib.h>
 
 // Embed DejaVuSans in executable through header file bigass array
 #include "dejavu.h"
@@ -350,6 +353,54 @@ enum UIState get_click_state(MouseState m)
 	}
 }
 
+// I wanted to compress the font in-memory, not that it's really
+// necessary. But I'm encountering issues with zlib that I'm too lazy
+// to figure out, so for right now it's just remaining uncompressed.
+#if 0
+#define CHUNK_SIZE 65536
+unsigned char * decompress_font(unsigned char * data, int len, int * dec_len)
+{
+	int mem_multiple = 1;
+	unsigned char * mem_buffer = (unsigned char *) malloc(CHUNK_SIZE * mem_multiple);
+	z_stream strm;
+	strm.zalloc   = Z_NULL;
+	strm.zfree    = Z_NULL;
+	strm.opaque   = Z_NULL;
+	strm.avail_in = 0;
+	strm.next_in  = Z_NULL;
+	if (inflateInit(&strm) != Z_OK) {
+		printf("Issue with inflateInit()\n");
+		return NULL;
+	}
+	int read = 0;
+	while (1) {
+		strm.avail_in  = len;
+		strm.next_in   = data + read;
+		strm.avail_out = CHUNK_SIZE;
+		strm.next_out  = mem_buffer + read;
+		int ret = inflate(&strm, Z_SYNC_FLUSH);
+		switch (ret) {
+		case Z_NEED_DICT:
+			printf("Encountered Z_NEED_DICT while decompressing.\n");
+			return NULL;
+		case Z_DATA_ERROR:
+			printf("Encountered Z_DATA_ERROR while decompressing.\n");
+			return NULL;
+		case Z_MEM_ERROR:
+			printf("Encountered Z_MEM_ERROR while decompressing.\n");
+			return NULL;
+		}
+		read += strm.next_out - mem_buffer;
+		if (read >= len) break;
+		mem_buffer = (unsigned char *) realloc(mem_buffer, CHUNK_SIZE * ++mem_multiple);
+		printf("%d\n", read);
+	}
+	if (dec_len) {
+		*dec_len = read;
+	}
+}
+#endif
+
 int main()
 {
 	SDL_Init(SDL_INIT_VIDEO);
@@ -361,12 +412,13 @@ int main()
 		SDL_WINDOW_SHOWN);
 	SDL_Renderer * renderer = SDL_CreateRenderer(window, -1, 0);
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-
+	
 	SDL_RWops * dejavu_mem = SDL_RWFromMem(DejaVuSans_ttf, DejaVuSans_ttf_len);
 	if (!dejavu_mem) {
 		printf("Couldn't open font file.\n");
 		return 1;
 	}
+	
 	default_font = TTF_OpenFontRW(dejavu_mem, 0, 16);
 	if (!default_font) {
 		printf("Font memory couldn't be processed as TTF_Font*:\n\t%s\n", TTF_GetError());
@@ -374,7 +426,7 @@ int main()
 	}
 	
 	HSVColor current_color = {180.0, 1.0, 1.0};
-
+	
 	enum UIState ui_state = UI_NONE;
 	
 	SDL_Event event;
@@ -423,7 +475,6 @@ int main()
 		draw_sample_box(renderer, from_RGBColor(hsv_to_rgb(current_color)));
 		draw_position_indicator(renderer, current_color);
 		SDL_RenderPresent(renderer);
-		SDL_Delay(8);
 	}
 	
 	return 0;
