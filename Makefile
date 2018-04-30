@@ -29,5 +29,6 @@ nix:
 	@echo "Building for Linux..."
 	gcc $(debug_opt) \
 		main.c \
-		-lSDL2 -lSDL2_ttf \
+		$(shell sdl2-config --static-libs) \
+		-lSDL2_ttf -lfreetype -lz \
 		-o picker
