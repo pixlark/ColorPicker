@@ -1,11 +1,16 @@
 // RGB/HSV conversions by David H from https://stackoverflow.com/questions/3018313/
 
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
+#include <math.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+
+// Embed DejaVuSans in executable through header file bigass array
+#include "dejavu.h"
 
 // A buttload of magic numbers for positioning stuff on the
 // screen. It's ugly, but it makes things clear.
@@ -17,6 +22,7 @@
 #define HUE_GRADIENT_HEIGHT (SAMPLE_BOX_SIZE / 2)
 #define HUE_SLIDER_HEIGHT   (HUE_GRADIENT_HEIGHT)
 #define HUE_SLIDER_WIDTH    (3)
+#define TEXT_PADDING        (10)
 
 // Start of David H's conversion code
 typedef struct {
@@ -135,6 +141,38 @@ RGBColor hsv_to_rgb(HSVColor in)
 }
 // End of David H's conversion code
 
+static TTF_Font * default_font;
+
+typedef struct {
+	uint32_t buttons;
+	int x;
+	int y;
+} MouseState;
+
+enum UIState {
+	UI_NONE,
+	UI_SLIDER_CHANGE,
+	UI_GRADIENT_CHANGE,
+};
+
+int clamp(int lower, int higher, int num)
+{
+	if (num < lower) {
+		return lower;
+	} else if (num > higher) {
+		return higher;
+	} else {
+		return num;
+	}
+}
+
+bool point_in_rect(SDL_Rect rect, int x, int y)
+{
+	return
+		x > rect.x && x < rect.x + rect.w &&
+		y > rect.y && y < rect.y + rect.h;
+}
+
 SDL_Color from_RGBColor(RGBColor rgb_color)
 {
 	SDL_Color color = {
@@ -205,58 +243,165 @@ void draw_hue_gradient(SDL_Renderer * renderer)
 void draw_hue_slider(SDL_Renderer * renderer, double hue)
 {
 	SDL_Rect draw_rect = {
-		(hue / 360.0) * HUE_GRADIENT_WIDTH,
+		((hue / 360.0) * HUE_GRADIENT_WIDTH) - (HUE_SLIDER_WIDTH / 2),
 		MAIN_GRADIENT_SIZE,
 		HUE_SLIDER_WIDTH,
 		HUE_SLIDER_HEIGHT,
 	};
-	SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, 0xff);
+	SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, 0xaa);
 	SDL_RenderFillRect(renderer, &draw_rect);
+}
+
+void draw_sample_box(SDL_Renderer * renderer, SDL_Color color)
+{
+	SDL_Rect draw_rect = {
+		HUE_GRADIENT_WIDTH,
+		MAIN_GRADIENT_SIZE,
+		SAMPLE_BOX_SIZE,
+		SAMPLE_BOX_SIZE,
+	};
+	SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 0xff);
+	SDL_RenderFillRect(renderer, &draw_rect);
+}
+
+void draw_text(SDL_Renderer * renderer, char * text, int x, int y)
+{
+	SDL_Color draw_color = {0xff, 0xff, 0xff, 0xff};
+	SDL_Surface * surface = TTF_RenderText_Solid(default_font, text, draw_color);
+	SDL_Rect draw_rect = {x, y, surface->w, surface->h};
+	SDL_Texture * texture = SDL_CreateTextureFromSurface(renderer, surface);
+	SDL_RenderCopy(renderer, texture, NULL, &draw_rect);
+	SDL_DestroyTexture(texture);
+	SDL_FreeSurface(surface);
+}
+
+void draw_info_text(SDL_Renderer * renderer, HSVColor hsv_color)
+{
+	RGBColor rgb_color = hsv_to_rgb(hsv_color);
+	char rgb_buffer[128];
+	sprintf(rgb_buffer, "R: %d G: %d B: %d",
+		(int) (rgb_color.r * 256),
+		(int) (rgb_color.g * 256),
+		(int) (rgb_color.b * 256));
+	draw_text(renderer, rgb_buffer,
+		TEXT_PADDING,
+		MAIN_GRADIENT_SIZE + HUE_GRADIENT_HEIGHT + TEXT_PADDING);
+	
+	char hsv_buffer[128];
+	sprintf(hsv_buffer, "H: %d S: %d V: %d",
+		(int)  hsv_color.h,
+		(int) (hsv_color.s * 100),
+		(int) (hsv_color.v * 100));
+	draw_text(renderer, hsv_buffer,
+		TEXT_PADDING + (HUE_GRADIENT_WIDTH / 2),
+		MAIN_GRADIENT_SIZE + HUE_GRADIENT_HEIGHT + TEXT_PADDING);
 }
 
 /* Elements that get rendered:
  *   [x] main gradient
  *   [x] hue gradient
- *   [ ] slider bar on hue gradient
- *   [ ] sampling box
+ *   [x] slider bar on hue gradient
+ *   [x] sampling box
  *   [ ] position indicator
- *   [ ] info text
+ *   [x] info text
  */
+
+enum UIState get_click_state(MouseState m)
+{
+	SDL_Rect main_gradient = {
+		0, 0, MAIN_GRADIENT_SIZE, MAIN_GRADIENT_SIZE,
+	};
+	SDL_Rect slider_gradient = {
+		0, MAIN_GRADIENT_SIZE,
+		HUE_GRADIENT_WIDTH, HUE_GRADIENT_HEIGHT,
+	};
+	if (point_in_rect(main_gradient, m.x, m.y)) {
+		return UI_GRADIENT_CHANGE;
+	} else if (point_in_rect(slider_gradient, m.x, m.y)) {
+		return UI_SLIDER_CHANGE;
+	} else {
+		return UI_NONE;
+	}
+}
 
 int main()
 {
 	SDL_Init(SDL_INIT_VIDEO);
+	TTF_Init();
 	SDL_Window * window = SDL_CreateWindow(
 		"Color Picker",
 		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
 		SCREEN_WIDTH, SCREEN_HEIGHT,
 		SDL_WINDOW_SHOWN);
 	SDL_Renderer * renderer = SDL_CreateRenderer(window, -1, 0);
+	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-	double current_hue = 180;
+	SDL_RWops * dejavu_mem = SDL_RWFromMem(DejaVuSans_ttf, DejaVuSans_ttf_len);
+	if (!dejavu_mem) {
+		printf("Couldn't open font file.\n");
+		return 1;
+	}
+	default_font = TTF_OpenFontRW(dejavu_mem, 0, 16);
+	if (!default_font) {
+		printf("Font memory couldn't be processed as TTF_Font*:\n\t%s\n", TTF_GetError());
+		return 1;
+	}
+	
+	HSVColor current_color = {180.0, 1.0, 1.0};
+
+	enum UIState ui_state = UI_NONE;
 	
 	SDL_Event event;
 	bool running = true;
 	while (running) {
+		MouseState m;
+		m.buttons = SDL_GetMouseState(&m.x, &m.y);
 		while (SDL_PollEvent(&event) != 0) {
 			switch (event.type) {
 			case SDL_QUIT:
 				running = false;
 				break;
+			case SDL_MOUSEBUTTONDOWN:
+				switch (event.button.button) {
+				case SDL_BUTTON_LEFT:
+					ui_state = get_click_state(m);
+					SDL_CaptureMouse(true);
+				}
+				break;
+			case SDL_MOUSEBUTTONUP:
+				ui_state = UI_NONE;
+				SDL_CaptureMouse(false);
+				break;
 			}
+			
 		}
+		// input
+		// hue slider
+		switch (ui_state) {
+		case UI_GRADIENT_CHANGE: {
+			current_color.s = ((double) clamp(0, MAIN_GRADIENT_SIZE, m.x) / MAIN_GRADIENT_SIZE);
+			current_color.v = 1.0 - ((double) clamp(0, MAIN_GRADIENT_SIZE, m.y) / MAIN_GRADIENT_SIZE);
+		}   break;
+		case UI_SLIDER_CHANGE:
+			current_color.h = ((double) clamp(0, HUE_GRADIENT_WIDTH, m.x) / HUE_GRADIENT_WIDTH) * 360.0;
+			break;
+		}
+		
+		// drawing
 		SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xff);
 		SDL_RenderClear(renderer);
 		// main gradient
-		draw_gradient(renderer, current_hue);
+		draw_gradient(renderer, current_color.h);
 		// hue slider
 		draw_hue_gradient(renderer);
-		draw_hue_slider(renderer, current_hue);
+		draw_hue_slider(renderer, current_color.h);
+		// info text
+		draw_info_text(renderer, current_color);
+		// sample box
+		draw_sample_box(renderer, from_RGBColor(hsv_to_rgb(current_color)));
 		SDL_RenderPresent(renderer);
-		SDL_Delay(17);
+		SDL_Delay(8);
 	}
 	
 	return 0;
 }
-
-
