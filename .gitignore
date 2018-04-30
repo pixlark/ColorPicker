@@ -1,3 +1,4 @@
+# old
 *.sln
 /colorpicker
 /colorpicker/*
@@ -5,3 +6,6 @@
 *.opensdf
 /vs-junk
 /vs-junk/*
+
+# 2.0 stuff
+picker
