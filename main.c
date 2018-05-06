@@ -12,11 +12,10 @@
 
 #include <zlib.h>
 
-// Embed DejaVuSans in executable through header file bigass array
+// Embed DejaVuSans in executable through array in header file
 #include "dejavu.h"
 
-// A buttload of magic numbers for positioning stuff on the
-// screen. It's ugly, but it makes things clear.
+// A bunch of magic numbers for UI positioning
 #define SCREEN_WIDTH        (512)
 #define SCREEN_HEIGHT       (600)
 #define MAIN_GRADIENT_SIZE  (SCREEN_WIDTH)
@@ -229,6 +228,7 @@ void draw_hue_gradient(SDL_Renderer * renderer)
 	SDL_Surface * surface = SDL_CreateRGBSurface(
 		0, HUE_GRADIENT_WIDTH, HUE_GRADIENT_HEIGHT, 32,
 		0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
+	
 	for (int y = 0; y < surface->h; y++) {
 		for (int x = 0; x < surface->w; x++) {
 			HSVColor hsv_color = {
@@ -353,54 +353,6 @@ enum UIState get_click_state(MouseState m)
 	}
 }
 
-// I wanted to compress the font in-memory, not that it's really
-// necessary. But I'm encountering issues with zlib that I'm too lazy
-// to figure out, so for right now it's just remaining uncompressed.
-#if 0
-#define CHUNK_SIZE 65536
-unsigned char * decompress_font(unsigned char * data, int len, int * dec_len)
-{
-	int mem_multiple = 1;
-	unsigned char * mem_buffer = (unsigned char *) malloc(CHUNK_SIZE * mem_multiple);
-	z_stream strm;
-	strm.zalloc   = Z_NULL;
-	strm.zfree    = Z_NULL;
-	strm.opaque   = Z_NULL;
-	strm.avail_in = 0;
-	strm.next_in  = Z_NULL;
-	if (inflateInit(&strm) != Z_OK) {
-		printf("Issue with inflateInit()\n");
-		return NULL;
-	}
-	int read = 0;
-	while (1) {
-		strm.avail_in  = len;
-		strm.next_in   = data + read;
-		strm.avail_out = CHUNK_SIZE;
-		strm.next_out  = mem_buffer + read;
-		int ret = inflate(&strm, Z_SYNC_FLUSH);
-		switch (ret) {
-		case Z_NEED_DICT:
-			printf("Encountered Z_NEED_DICT while decompressing.\n");
-			return NULL;
-		case Z_DATA_ERROR:
-			printf("Encountered Z_DATA_ERROR while decompressing.\n");
-			return NULL;
-		case Z_MEM_ERROR:
-			printf("Encountered Z_MEM_ERROR while decompressing.\n");
-			return NULL;
-		}
-		read += strm.next_out - mem_buffer;
-		if (read >= len) break;
-		mem_buffer = (unsigned char *) realloc(mem_buffer, CHUNK_SIZE * ++mem_multiple);
-		printf("%d\n", read);
-	}
-	if (dec_len) {
-		*dec_len = read;
-	}
-}
-#endif
-
 int main()
 {
 	SDL_Init(SDL_INIT_VIDEO);
@@ -454,18 +406,20 @@ int main()
 			}
 			
 		}
-		// input
+		// Input
 		switch (ui_state) {
 		case UI_GRADIENT_CHANGE: {
+			// Clamping the mouse position to the sides of the gradient so that you don't get crazy color values
 			current_color.s = ((double) clamp(0, MAIN_GRADIENT_SIZE, m.x) / MAIN_GRADIENT_SIZE);
 			current_color.v = 1.0 - ((double) clamp(0, MAIN_GRADIENT_SIZE, m.y) / MAIN_GRADIENT_SIZE);
 		}   break;
 		case UI_SLIDER_CHANGE:
+			// Clamping the mouse position to the sides of the hue gradient
 			current_color.h = ((double) clamp(0, HUE_GRADIENT_WIDTH, m.x) / HUE_GRADIENT_WIDTH) * 360.0;
 			break;
 		}
 		
-		// drawing
+		// Drawing
 		SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xff);
 		SDL_RenderClear(renderer);
 		draw_gradient(renderer, current_color.h);
@@ -476,12 +430,10 @@ int main()
 		draw_position_indicator(renderer, current_color);
 		SDL_RenderPresent(renderer);
 
-		// limit framerate
+		// Limit framerate
 		{
 			uint64_t counter = SDL_GetPerformanceCounter();
 			int delta_ms = (counter - last_counter) * 1000 / SDL_GetPerformanceFrequency();
-			//printf("%3.2f\r", 1.0 / ((double) delta_ms / 1000));
-			//fflush(stdout);
 			int target_ms = 17; // 17 ms between each frame is about 60 fps
 			if (target_ms - delta_ms > 0) SDL_Delay(target_ms - delta_ms);
 			last_counter = counter;
